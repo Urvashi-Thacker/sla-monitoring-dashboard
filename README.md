@@ -75,6 +75,7 @@ Checked and **not** found (the code still handles them): unparseable timestamps,
 - **Outage detection:** a slot is *degraded* if its latency is more than 2× that service's median. **3 or more consecutive degraded slots (≥ 45 min) is an outage.** A slot with no latency can bridge a run but can't start one. Failed checks outside outages are *blips*. Outages are for explaining what happened; **the SLA number always comes from status codes alone.**
 - **Dates in the log filter are UTC calendar days**, and a range is inclusive on both ends. Monitoring and SLA periods are in UTC, and the UI labels times as UTC everywhere.
 - **Each upload is a separate dataset** (`upload_id`). The dashboard shows the latest one by default and lets you switch. Nothing is overwritten.
+- **Uploading the same file again does not create a duplicate.** The function takes a SHA-256 fingerprint of the file contents (`uploads.file_hash`, unique). If that exact file already exists, it returns the existing dataset and the UI says so. A file with *any* change has a different fingerprint and is stored as a new dataset, because it is different data. The unique constraint plus `on conflict do nothing` also covers two identical uploads arriving at the same moment.
 - **Latency percentiles** use successful checks only, since failed requests' latency describes the error path.
 
 ### Stats chosen, and why
@@ -122,4 +123,3 @@ python scripts/verify_pipeline.py "path/to/folder/with/csvs"
 - **Unit tests** for each cleaning rule (every issue in §2 as a fixture), and property tests for the timezone handling
 - **Make the thresholds configurable:** outage factor, minimum duration, missing-slot policy and credit tiers, each set per service
 - **Charts:** an uptime timeline per service with outages highlighted, and a latency heatmap
-- **Idempotent uploads:** hash the file and warn when the same file is uploaded twice

@@ -25,6 +25,7 @@ export default function UploadPage() {
     setError('')
     try {
       setResult(await api.upload(file))
+      setFile(null)
     } catch (e) {
       setError(e.message)
     } finally {
@@ -60,7 +61,10 @@ export default function UploadPage() {
 
       {result && (
         <div className="card result">
-          <h2>Processed: {result.filename}</h2>
+          {result.duplicate && (
+            <div className="alert info">This file was already uploaded as dataset #{result.upload_id}. Showing the existing results instead of creating a duplicate.</div>
+          )}
+          <h2>{result.duplicate ? 'Already processed' : 'Processed'}: {result.filename}</h2>
           <div className="kpis">
             <div className="kpi"><span className="kpi-label">Rows in file</span><span className="kpi-value">{result.total_rows.toLocaleString()}</span></div>
             <div className="kpi good"><span className="kpi-label">Accepted</span><span className="kpi-value">{result.accepted_rows.toLocaleString()}</span></div>

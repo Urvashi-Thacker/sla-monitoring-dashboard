@@ -1,6 +1,7 @@
 create table if not exists uploads (
     id              bigserial primary key,
     filename        text        not null,
+    file_hash       text        unique,
     uploaded_at     timestamptz not null default now(),
     total_rows      int         not null,
     accepted_rows   int         not null,

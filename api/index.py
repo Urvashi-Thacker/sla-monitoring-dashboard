@@ -1,3 +1,4 @@
+import hashlib
 import os
 import sys
 from datetime import date, datetime, time, timedelta, timezone
@@ -52,6 +53,20 @@ def health():
     return {"ok": True}
 
 
+def duplicate_response(existing: dict) -> dict:
+    return {
+        "upload_id": existing["id"],
+        "filename": existing["filename"],
+        "total_rows": existing["total_rows"],
+        "accepted_rows": existing["accepted_rows"],
+        "rejected_rows": existing["rejected_rows"],
+        "period_start": existing["period_start"],
+        "period_end": existing["period_end"],
+        "issues": existing["issues"],
+        "duplicate": True,
+    }
+
+
 @app.post("/api/upload")
 async def upload(request: Request, filename: str = Query("upload.csv")):
     body = await request.body()
@@ -70,16 +85,28 @@ async def upload(request: Request, filename: str = Query("upload.csv")):
     if not res.accepted:
         raise HTTPException(400, "No valid rows found in file")
 
+    file_hash = hashlib.sha256(body).hexdigest()
     a = res.accepted
     with db() as conn, conn.cursor() as cur:
+        cur.execute("select * from uploads where file_hash = %s", (file_hash,))
+        existing = cur.fetchone()
+        if existing:
+            return duplicate_response(existing)
+
         cur.execute(
-            """insert into uploads (filename, total_rows, accepted_rows, rejected_rows,
+            """insert into uploads (filename, file_hash, total_rows, accepted_rows, rejected_rows,
                                     period_start, period_end, issues)
-               values (%s,%s,%s,%s,%s,%s,%s) returning id""",
-            (filename, res.total_rows, len(a), len(res.rejected),
+               values (%s,%s,%s,%s,%s,%s,%s,%s)
+               on conflict (file_hash) do nothing
+               returning id""",
+            (filename, file_hash, res.total_rows, len(a), len(res.rejected),
              res.period_start, res.period_end, Jsonb(dict(res.issues))),
         )
-        upload_id = cur.fetchone()["id"]
+        inserted = cur.fetchone()
+        if inserted is None:
+            cur.execute("select * from uploads where file_hash = %s", (file_hash,))
+            return duplicate_response(cur.fetchone())
+        upload_id = inserted["id"]
 
         cur.execute(
             """insert into checks (upload_id, service_id, service_name, ts, status_code, is_up,
@@ -112,6 +139,7 @@ async def upload(request: Request, filename: str = Query("upload.csv")):
         "period_start": res.period_start,
         "period_end": res.period_end,
         "issues": dict(res.issues),
+        "duplicate": False,
     }
 
 

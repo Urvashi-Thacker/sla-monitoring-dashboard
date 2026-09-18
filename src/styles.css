@@ -242,3 +242,4 @@ tr.row-down td { background: var(--critical-soft); }
 }
 .upload-select select { width: 100%; max-width: 100%; text-overflow: ellipsis; }
 .result .kpis { margin: 12px 0 14px; }
+.alert.info { background: var(--accent-soft); color: var(--accent); margin-top: 0; }
