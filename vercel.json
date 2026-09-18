@@ -1,0 +1,12 @@
+{
+  "functions": {
+    "api/index.py": {
+      "includeFiles": "api/_lib/**",
+      "maxDuration": 60
+    }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ]
+}
