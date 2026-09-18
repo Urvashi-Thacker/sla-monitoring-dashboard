@@ -1,9 +1,3 @@
-"""
-Run the same cleaning + stats code the cloud function uses against every CSV in
-a folder, and compare detected outages with dataset_incident_log.json.
-
-Usage:  python scripts/verify_pipeline.py <folder with csvs + dataset_incident_log.json>
-"""
 import json
 import re
 import sys

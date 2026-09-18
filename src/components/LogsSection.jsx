@@ -5,8 +5,8 @@ const PAGE_SIZE = 50
 const EMPTY = { mode: 'single', date: '', from: '', to: '', service_id: '', status: '' }
 
 export default function LogsSection({ uploadId, stats, focus }) {
-  const [draft, setDraft] = useState(EMPTY)     // what the user is editing
-  const [applied, setApplied] = useState(EMPTY) // what the table is showing
+  const [draft, setDraft] = useState(EMPTY)
+  const [applied, setApplied] = useState(EMPTY)
   const [page, setPage] = useState(1)
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
@@ -47,7 +47,15 @@ export default function LogsSection({ uploadId, stats, focus }) {
 
   return (
     <section className="card" id="logs">
-      <h2>Check logs</h2>
+      <div className="logs-head">
+        <h2>Check logs</h2>
+        {data && (
+          <span className="muted small">
+            {data.total.toLocaleString()} records
+            {data.total > 0 && ` · ${((page - 1) * PAGE_SIZE + 1).toLocaleString()}–${Math.min(page * PAGE_SIZE, data.total).toLocaleString()}`}
+          </span>
+        )}
+      </div>
       <form className="filters" onSubmit={apply}>
         <div className="segmented">
           <button type="button" className={draft.mode === 'single' ? 'active' : ''} onClick={() => setDraft({ ...draft, mode: 'single' })}>Single date</button>
@@ -72,33 +80,32 @@ export default function LogsSection({ uploadId, stats, focus }) {
             <option value="">All</option><option value="up">Up (2xx)</option><option value="down">Down</option>
           </select>
         </label>
-        <button type="submit" className="primary">Apply</button>
-        <button type="button" onClick={clear}>Clear</button>
+        <div className="filter-actions">
+          <button type="submit" className="primary">Apply</button>
+          <button type="button" onClick={clear}>Reset</button>
+        </div>
       </form>
 
       {error && <div className="alert error">{error}</div>}
 
       {data && (
         <>
-          <p className="muted small">
-            {data.total.toLocaleString()} records
-            {data.total > 0 && ` · showing ${((page - 1) * PAGE_SIZE + 1).toLocaleString()}–${Math.min(page * PAGE_SIZE, data.total).toLocaleString()}`}
-          </p>
-          <div className="table-wrap">
+          <ActiveFilters applied={applied} services={stats.services} onClear={clear} />
+          <div className="table-wrap logs-table">
             <table>
               <thead>
-                <tr><th>Time (UTC)</th><th>Service</th><th>Status</th><th className="num">Latency</th><th>Agent</th><th>Region</th><th>Cleaning notes</th></tr>
+                <tr><th>Time (UTC)</th><th>Service</th><th>Status</th><th className="num">Latency</th><th className="col-hide">Agent</th><th className="col-hide">Region</th><th className="col-hide">Cleaning notes</th></tr>
               </thead>
               <tbody>
                 {data.items.map((r) => (
                   <tr key={r.id} className={r.is_up ? '' : 'row-down'}>
                     <td className="mono">{fmtUtc(r.ts).slice(0, 16)}</td>
                     <td>{r.service_name}</td>
-                    <td><span className={`pill ${r.is_up ? 'ok' : 'bad'}`}>{r.status_code}</span></td>
+                    <td><span className={`status-badge ${r.is_up ? 'good' : 'critical'}`}><span aria-hidden>{r.is_up ? '✓' : '✕'}</span>{r.status_code}</span></td>
                     <td className="num">{r.latency_ms == null ? '—' : `${Math.round(r.latency_ms)} ms`}</td>
-                    <td>{r.agent}</td>
-                    <td>{r.region}</td>
-                    <td className="small muted">{r.flags.join(', ')}</td>
+                    <td className="col-hide">{r.agent}</td>
+                    <td className="col-hide">{r.region}</td>
+                    <td className="col-hide">{r.flags.map((f) => <span key={f} className="flag">{f.replace(/_/g, ' ')}</span>)}</td>
                   </tr>
                 ))}
                 {data.items.length === 0 && <tr><td colSpan={7} className="muted">No records match these filters.</td></tr>}
@@ -113,5 +120,21 @@ export default function LogsSection({ uploadId, stats, focus }) {
         </>
       )}
     </section>
+  )
+}
+
+function ActiveFilters({ applied, services, onClear }) {
+  const parts = []
+  if (applied.mode === 'single' && applied.date) parts.push(applied.date)
+  if (applied.mode === 'range' && (applied.from || applied.to)) parts.push(`${applied.from || 'start'} → ${applied.to || 'end'}`)
+  if (applied.service_id) parts.push(services.find((s) => s.service_id === applied.service_id)?.service_name || applied.service_id)
+  if (applied.status) parts.push(applied.status === 'up' ? 'Up only' : 'Down only')
+  if (!parts.length) return null
+  return (
+    <div className="active-filters">
+      <span className="muted small">Filtered by</span>
+      {parts.map((p) => <span key={p} className="chip">{p}</span>)}
+      <button className="link small" onClick={onClear}>Clear all</button>
+    </div>
   )
 }

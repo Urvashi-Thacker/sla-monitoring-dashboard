@@ -1,15 +1,3 @@
-"""
-Serverless API (Vercel Python Function -> runs on AWS Lambda).
-
-Stateless: every request opens its own DB connection, does its work, and
-closes it. Nothing is kept in memory between invocations.
-
-  POST /api/upload          raw CSV body -> clean -> save to Postgres
-  GET  /api/uploads         list of uploads
-  GET  /api/stats           SLA stats for one upload (default: latest)
-  GET  /api/logs            check records, filter by date OR date range
-  GET  /api/rejected        rows refused during cleaning
-"""
 import os
 import sys
 from datetime import date, datetime, time, timedelta, timezone
@@ -19,22 +7,32 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "_lib"))
-from cleaning import clean_csv  # noqa: E402
-from stats import compute_stats  # noqa: E402
+from cleaning import clean_csv
+from stats import compute_stats
 
-MAX_UPLOAD_BYTES = 4 * 1024 * 1024  # Vercel request body limit is 4.5 MB
+MAX_UPLOAD_BYTES = 4 * 1024 * 1024
 
 app = FastAPI(title="SLA Monitoring API")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+
+@app.exception_handler(psycopg.OperationalError)
+async def db_unavailable(_request: Request, exc: psycopg.OperationalError):
+    return JSONResponse(status_code=503, content={"detail": f"Database connection failed: {exc}"})
+
+
+@app.exception_handler(Exception)
+async def unexpected(_request: Request, exc: Exception):
+    return JSONResponse(status_code=500, content={"detail": f"{type(exc).__name__}: {exc}"})
 
 
 def db():
     url = os.environ.get("DATABASE_URL")
     if not url:
         raise HTTPException(500, "DATABASE_URL is not configured")
-    # prepare_threshold=None: required for Supabase's transaction pooler (port 6543)
     return psycopg.connect(url, row_factory=dict_row, prepare_threshold=None, connect_timeout=10)
 
 
@@ -73,7 +71,7 @@ async def upload(request: Request, filename: str = Query("upload.csv")):
         raise HTTPException(400, "No valid rows found in file")
 
     a = res.accepted
-    with db() as conn, conn.cursor() as cur:  # one transaction: all or nothing
+    with db() as conn, conn.cursor() as cur:
         cur.execute(
             """insert into uploads (filename, total_rows, accepted_rows, rejected_rows,
                                     period_start, period_end, issues)
@@ -83,8 +81,6 @@ async def upload(request: Request, filename: str = Query("upload.csv")):
         )
         upload_id = cur.fetchone()["id"]
 
-        # Bulk insert in ONE statement: each column is sent as an array and
-        # unnest() turns the arrays back into rows. Fast, single round trip.
         cur.execute(
             """insert into checks (upload_id, service_id, service_name, ts, status_code, is_up,
                                    latency_ms, agent, region, flags, source_line)
@@ -159,7 +155,6 @@ def logs(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
 ):
-    # Single date is just a range of one day. Dates are UTC calendar days.
     if date_ and (from_ or to):
         raise HTTPException(400, "Use either date OR from/to, not both")
     if date_:

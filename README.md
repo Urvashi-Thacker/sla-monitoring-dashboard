@@ -2,7 +2,7 @@
 
 Upload a CSV of service health checks, then a serverless cloud function cleans it and saves it to Postgres. A one-page dashboard shows the SLA stats and the underlying logs.
 
-**Live URL:** `https://<your-app>.vercel.app` (last verified live: `<date>`)
+**Live URL:** https://sla-monitoring-dashboard-murex.vercel.app (last verified live: 2026-09-18)
 
 ---
 
@@ -54,7 +54,7 @@ I profiled all 5 files (9, 12, 14, 21 and 30 days). **Every file has the same se
 | 5 | **Missing latency** | ~1.2% of rows are blank | The row is **kept**, because its status code is still a valid availability signal. Latency is stored as null and left out of the percentiles. Flag: `missing_latency` |
 | 6 | **Negative latency** | `-286 ms`, one per file | Physically impossible, so latency is set to null and the row is kept. Flag: `negative_latency` |
 | 7 | **Invalid HTTP status** `999` | One per file | Not a real HTTP code, so we can't tell whether the service was up. Rejected as `invalid_status_code`. If no other agent covered that slot, it becomes a *missing* slot, which counts neither as up nor as down. In the 14-day file, agent-2 reported `200` for that same slot, so the slot is still covered. |
-| 8 | **Two agents report the same slot** | ~7% of slots have agent-1 **and** agent-2 | Both rows are kept, because they're real observations. For uptime they are merged into one slot (see assumptions). In this data the two agents never disagreed on a valid status. |
+| 8 | **Two agents report the same slot** | ~8% of slots have agent-1 **and** agent-2 | Both rows are kept, because they're real observations. For uptime they are merged into one slot (see assumptions). In this data the two agents never disagreed on a valid status. |
 | 9 | **Outages "flap"** | Inside a logged outage some checks still return 200, but every check has latency 3–5× normal | Outage detection is based on latency degradation, not only on runs of consecutive failures (see §3) |
 | 10 | **Background failures** | Isolated 500/502/503s spread across all services, with normal latency | Counted as downtime for the SLA, and labelled *blips*, not outages |
 
@@ -81,7 +81,9 @@ Checked and **not** found (the code still handles them): unparseable timestamps,
 The two audiences are **on-call engineers** ("what broke, when, for how long") and **billing** ("who breached, what credit").
 
 - **Header:** how many services are below 99.9%, total downtime, outages detected, checks analysed, rows rejected
-- **Per service:** uptime %, met or breached, credit %, downtime, outages, blips, longest outage, p50/p95 latency, missing checks, error breakdown by status code
+- **Service health cards:** one per service, showing uptime % on a 95–100% bar with the 99.9% target marked, met or breached, credit %, downtime, outages, blips and p95 latency
+- **Daily health strip** on each card: one cell per UTC day (healthy / 1–2 failures / 3+ failures / outage). Hover a cell for details; click it to open that day's logs. You can see *when* things went wrong without reading a table.
+- **Detailed table** (can be expanded) for billing: all of the above plus p50/p99 latency, missing checks and an error breakdown by status code
 - **Outage list:** click one to jump the log view to that service and day
 - **Data quality:** what cleaning changed, plus the rejected rows. If the number decides a billing credit, reviewers need to see what was thrown away.
 

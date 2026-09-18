@@ -35,10 +35,7 @@ export default function UploadPage() {
   return (
     <div className="page narrow">
       <h1>Upload health-check CSV</h1>
-      <p className="muted">
-        The file is sent to a serverless cloud function that parses, validates and cleans it, then saves the result to
-        Postgres.
-      </p>
+      <p className="muted">Upload a monitoring export to see service availability, outages and check logs.</p>
 
       <label
         className={`dropzone ${dragging ? 'dragging' : ''}`}
@@ -47,15 +44,16 @@ export default function UploadPage() {
         onDrop={(e) => { e.preventDefault(); setDragging(false); pick(e.dataTransfer.files[0]) }}
       >
         <input type="file" accept=".csv,text/csv" onChange={(e) => pick(e.target.files[0])} hidden />
+        <span className="drop-icon" aria-hidden>⇪</span>
         {file ? (
-          <span><strong>{file.name}</strong> ({(file.size / 1024).toFixed(0)} KB)</span>
+          <span><strong>{file.name}</strong> <span className="muted">({(file.size / 1024).toFixed(0)} KB) · click to change</span></span>
         ) : (
-          <span>Drag a CSV here or <u>browse</u></span>
+          <span>Drag a CSV here or <u>browse</u><br /><span className="muted small">Max 4 MB</span></span>
         )}
       </label>
 
-      <button className="primary" disabled={!file || busy} onClick={submit}>
-        {busy ? 'Processing in cloud function…' : 'Upload & process'}
+      <button className="primary wide" disabled={!file || busy} onClick={submit}>
+        {busy ? <><span className="spinner" aria-hidden /> Processing…</> : 'Upload & process'}
       </button>
 
       {error && <div className="alert error">{error}</div>}
@@ -63,10 +61,10 @@ export default function UploadPage() {
       {result && (
         <div className="card result">
           <h2>Processed: {result.filename}</h2>
-          <div className="tiles">
-            <div className="tile"><span className="label">Rows in file</span><span className="value">{result.total_rows.toLocaleString()}</span></div>
-            <div className="tile"><span className="label">Accepted</span><span className="value ok">{result.accepted_rows.toLocaleString()}</span></div>
-            <div className="tile"><span className="label">Rejected</span><span className="value bad">{result.rejected_rows.toLocaleString()}</span></div>
+          <div className="kpis">
+            <div className="kpi"><span className="kpi-label">Rows in file</span><span className="kpi-value">{result.total_rows.toLocaleString()}</span></div>
+            <div className="kpi good"><span className="kpi-label">Accepted</span><span className="kpi-value">{result.accepted_rows.toLocaleString()}</span></div>
+            <div className="kpi critical"><span className="kpi-label">Rejected</span><span className="kpi-value">{result.rejected_rows.toLocaleString()}</span></div>
           </div>
           <p className="muted">Data covers {fmtUtc(result.period_start)} → {fmtUtc(result.period_end)}</p>
           <h3>What the cleaning did</h3>

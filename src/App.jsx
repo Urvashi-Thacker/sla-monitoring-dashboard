@@ -6,7 +6,10 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <span className="brand">SLA Monitor</span>
+        <span className="brand">
+          <span className="brand-mark" aria-hidden>◉</span>
+          SLA Monitor
+        </span>
         <nav>
           <NavLink to="/upload">Upload</NavLink>
           <NavLink to="/dashboard">Dashboard</NavLink>

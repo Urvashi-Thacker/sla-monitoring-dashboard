@@ -1,10 +1,3 @@
-"""
-Cleaned check rows -> SLA stats.
-
-Unit of measurement is the *slot*: one service at one 15-minute check time.
-Several agents may report the same slot; they are merged first so a slot is
-never double counted.
-"""
 from __future__ import annotations
 
 from collections import Counter, defaultdict
@@ -13,7 +6,6 @@ from datetime import datetime, timedelta
 CHECK_INTERVAL = timedelta(minutes=15)
 SLA_TARGET = 99.9
 
-# Credit tiers (assumption, modelled on common cloud SLAs): uptime below X -> credit %
 CREDIT_TIERS = [(95.0, 100), (99.0, 25), (99.9, 10)]
 
 
@@ -27,7 +19,6 @@ def credit_for(uptime: float | None) -> int:
 
 
 def percentile(sorted_vals: list[float], p: float) -> float | None:
-    """Linear-interpolated percentile (same as numpy default / Postgres percentile_cont)."""
     if not sorted_vals:
         return None
     k = (len(sorted_vals) - 1) * p
@@ -36,12 +27,6 @@ def percentile(sorted_vals: list[float], p: float) -> float | None:
 
 
 def merge_slots(rows: list[dict]) -> dict[tuple, dict]:
-    """(service_id, ts) -> {'up': bool, 'codes': set, 'key': (service_id, ts)}.
-
-    Rule: a slot is DOWN only if every agent that reported it saw a failure.
-    If any agent got a 2xx, the service was reachable, so a single agent's
-    failure is treated as an agent/network problem, not a service outage.
-    """
     slots: dict[tuple, dict] = {}
     for r in rows:
         k = (r["service_id"], r["ts"])
@@ -51,23 +36,11 @@ def merge_slots(rows: list[dict]) -> dict[tuple, dict]:
     return slots
 
 
-DEGRADED_FACTOR = 2.0   # latency > 2x the service's median latency = degraded slot
-OUTAGE_MIN_SLOTS = 3    # >= 3 consecutive degraded slots (45 min) = outage
+DEGRADED_FACTOR = 2.0
+OUTAGE_MIN_SLOTS = 3
 
 
 def detect_incidents(items: list, sorted_lat: list[float], slot_latency: dict) -> list[dict]:
-    """items: [(ts, slot)] sorted by ts for ONE service.
-
-    Finding from the data: during a real outage the service FLAPS - some checks
-    fail, some pass - but latency on every check is several times normal.
-    Background failures elsewhere have normal latency. So outages are found by
-    latency, not by status alone:
-      * a slot is 'degraded' if its latency > 2x the service's median
-      * a slot with no latency value can bridge a run but not start/end one
-      * a run of >= 3 degraded slots is an OUTAGE
-    Failed checks outside outages are reported as isolated BLIPS.
-    Note: SLA uptime itself is always computed from status codes, not from this.
-    """
     median = percentile(sorted_lat, 0.5) or 0
 
     def state(i: int) -> str:
@@ -87,7 +60,6 @@ def detect_incidents(items: list, sorted_lat: list[float], slot_latency: dict) -
         elif st == "normal" and cur is not None:
             runs.append(cur)
             cur = None
-        # "unknown" neither extends nor closes the run
     if cur is not None:
         runs.append(cur)
 
@@ -133,7 +105,6 @@ def compute_stats(rows: list[dict], period_start: datetime, period_end: datetime
         if not r["is_up"]:
             errors[r["service_id"]][str(r["status_code"])] += 1
 
-    # max latency seen for each slot (used to find degraded edges of an outage)
     slot_latency: dict[tuple, float] = {}
     for r in rows:
         if r["latency_ms"] is not None:
@@ -150,6 +121,16 @@ def compute_stats(rows: list[dict], period_start: datetime, period_end: datetime
         observed = len(items)
         down = [(ts, s) for ts, s in items if not s["up"]]
         uptime = round(100 * (observed - len(down)) / observed, 3) if observed else None
+
+        days: dict[str, list[int]] = {}
+        d = period_start
+        while d < period_end:
+            days[d.date().isoformat()] = [0, 0]
+            d += timedelta(days=1)
+        for ts, s in items:
+            day = days.setdefault(ts.date().isoformat(), [0, 0])
+            day[0] += 1
+            day[1] += 0 if s["up"] else 1
 
         lat = sorted(latencies[svc])
         svc_incidents = detect_incidents(items, lat, slot_latency)
@@ -175,6 +156,12 @@ def compute_stats(rows: list[dict], period_start: datetime, period_end: datetime
             "latency_p95_ms": percentile(lat, 0.95),
             "latency_p99_ms": percentile(lat, 0.99),
             "errors_by_code": dict(errors[svc]),
+            "daily": [
+                {"date": k, "observed": v[0], "down": v[1],
+                 "uptime_pct": round(100 * (v[0] - v[1]) / v[0], 2) if v[0] else None,
+                 "outage": any(o["start"][:10] <= k <= o["end"][:10] for o in outages)}
+                for k, v in sorted(days.items())
+            ],
         })
 
     incidents.sort(key=lambda i: (i["kind"] != "outage", i["start"]))

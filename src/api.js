@@ -13,7 +13,7 @@ export const api = {
     request(`/api/upload?${qs({ filename: file.name })}`, {
       method: 'POST',
       headers: { 'Content-Type': 'text/csv' },
-      body: file, // raw file bytes; parsing happens in the cloud function
+      body: file,
     }),
   uploads: () => request('/api/uploads'),
   stats: (uploadId) => request(`/api/stats?${qs({ upload_id: uploadId })}`),

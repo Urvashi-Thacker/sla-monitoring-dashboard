@@ -25,18 +25,25 @@ export default function DashboardPage() {
   }, [uploadId])
 
   if (error) return <div className="page"><div className="alert error">{error}</div></div>
-  if (!uploads) return <div className="page muted">Loading…</div>
+  if (!uploads) return <div className="page"><div className="card skeleton" aria-busy="true"><div /><div /><div /></div></div>
   if (uploads.length === 0)
     return (
       <div className="page">
-        <p>No data yet. <Link to="/upload">Upload a CSV</Link> to get started.</p>
+        <div className="card empty">
+          <h2>No data yet</h2>
+          <p className="muted">Upload a monitoring CSV to see SLA stats and logs.</p>
+          <Link className="primary button" to="/upload">Upload a CSV</Link>
+        </div>
       </div>
     )
 
   return (
     <div className="page">
       <div className="page-head">
-        <h1>SLA dashboard</h1>
+        <div>
+          <h1>SLA dashboard</h1>
+          <p className="muted small">Availability, outages and raw checks for one uploaded dataset. All times UTC.</p>
+        </div>
         <label className="upload-select">
           Dataset
           <select value={uploadId} onChange={(e) => setParams({ upload: e.target.value })}>
@@ -55,7 +62,7 @@ export default function DashboardPage() {
           <LogsSection key={uploadId} uploadId={uploadId} stats={stats} focus={focus} />
         </>
       ) : (
-        <p className="muted">Loading stats…</p>
+        <div className="card skeleton" aria-busy="true"><div /><div /><div /></div>
       )}
     </div>
   )

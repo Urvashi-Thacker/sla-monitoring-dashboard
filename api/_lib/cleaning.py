@@ -1,11 +1,3 @@
-"""
-CSV -> cleaned check rows.
-
-Pure functions, no I/O, so the same code runs inside the serverless function
-and in local tests/scripts. Every decision a rule makes is recorded either as a
-`flag` on the kept row or as a `reason` on a rejected row, so the dashboard can
-show exactly what the pipeline did to the data.
-"""
 from __future__ import annotations
 
 import csv
@@ -32,7 +24,6 @@ class CleanResult:
 
 
 def parse_timestamp(raw: str) -> tuple[datetime | None, str | None]:
-    """Return (utc_datetime, flag). flag says which non-canonical format was fixed."""
     raw = raw.strip()
     if not raw:
         return None, None
@@ -57,7 +48,6 @@ def parse_status(raw: str) -> int | None:
 
 
 def parse_latency(raw: str, unit: str) -> tuple[float | None, str | None]:
-    """Return (latency_ms, flag)."""
     raw, unit = raw.strip(), unit.strip().lower()
     if raw == "":
         return None, "missing_latency"
